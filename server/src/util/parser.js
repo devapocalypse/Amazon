@@ -65,10 +65,30 @@ export async function parseUniversal(input, creditCard) {
     return null;
   }
 
+  function extractTotal(text) {
+    const normalized = text.replace(/,/g, '');
+    const patterns = [
+      /invoice\s*total\s*[:\-]?\s*\$?\s*(\d+(?:\.\d{1,2})?)/i,
+      /order\s*total\s*[:\-]?\s*\$?\s*(\d+(?:\.\d{1,2})?)/i,
+      /\btotal\s*[:\-]?\s*\$?\s*(\d+(?:\.\d{1,2})?)/i,
+      /\$\s*(\d+(?:\.\d{1,2})?)\s*total\b/i
+    ];
+
+    for (const pattern of patterns) {
+      const match = normalized.match(pattern);
+      if (!match) continue;
+      const total = parseFloat(match[1]);
+      if (!Number.isNaN(total)) return Math.round(total * 100) / 100;
+    }
+
+    return null;
+  }
+
   const upcIndexes = indexOfUPC(input);
   const items = splitInput(input, upcIndexes);
   const handlingFee = extractHandlingFee(input);
   const freight = extractFreight(input);
+  const realTotal = extractTotal(input);
 
   // Fetch all known Universal vendor codes once, sorted longest-first for greedy prefix matching
   const knownVendorRows = await pool.query(
@@ -78,7 +98,7 @@ export async function parseUniversal(input, creditCard) {
     .map(r => r.universal_id)
     .filter(Boolean)
     .sort((a, b) => b.length - a.length);
-
+  let addedTotal = 0;
   let date;
   const dateMatch = input.match(/(\b\d{1,2}\/\d{1,2}\/\d{4}\b)|(\b\d{4}-\d{2}-\d{2}\b)/);
   if (dateMatch) {
@@ -117,8 +137,8 @@ export async function parseUniversal(input, creditCard) {
     const dollarIndex = item.indexOf('$');
     let quantity = null;
     if (dollarIndex !== -1) {
-      const beforeDollar = item.slice(0, dollarIndex);
-      const m = beforeDollar.match(/(\d+)\s*$/m);
+      const lineBeforeDollar = item.slice(0, dollarIndex).split('\n').pop() || '';
+      const m = lineBeforeDollar.match(/(\d+)\s*$/);
       if (m) quantity = parseInt(m[1], 10);
     }
 
@@ -140,6 +160,7 @@ export async function parseUniversal(input, creditCard) {
       .trim();
 
     if (!vendorNum) continue;
+    addedTotal += amount || 0;
     const key = vendorNum;
     const idResult = await getAmazonId('universal', key);
     const amazonId = idResult.rows[0]?.amazon_id ?? 'Unknown';
@@ -187,6 +208,18 @@ export async function parseUniversal(input, creditCard) {
     });
   }
 
+  output["Line"].push({
+    "DetailType": "AccountBasedExpenseLineDetail",
+    "Amount": Math.round((realTotal - addedTotal - (handlingFee || 0) - (freight || 0)) * 100) / 100,
+    "Description": "Rounding Variance",
+    "AccountBasedExpenseLineDetail": {
+      "AccountRef": {
+        "value": "1150040007",
+        "name": "Rounding Variance"
+      }
+    }
+  });
+
   return { output };
 }
 
@@ -211,6 +244,25 @@ export async function parseACD(input, creditCard) {
     return null;
   }
 
+  function extractTotal(text) {
+    const normalized = text.replace(/,/g, '');
+    const patterns = [
+      /invoice\s*total\s*[:\-]?\s*\$?\s*(\d+(?:\.\d{1,2})?)/i,
+      /order\s*total\s*[:\-]?\s*\$?\s*(\d+(?:\.\d{1,2})?)/i,
+      /\btotal\s*[:\-]?\s*\$?\s*(\d+(?:\.\d{1,2})?)/i,
+      /\$\s*(\d+(?:\.\d{1,2})?)\s*total\b/i
+    ];
+
+    for (const pattern of patterns) {
+      const match = normalized.match(pattern);
+      if (!match) continue;
+      const total = parseFloat(match[1]);
+      if (!Number.isNaN(total)) return Math.round(total * 100) / 100;
+    }
+
+    return null;
+  }
+
   let date;
   const dateMatch = input.match(/(\b\d{1,2}\/\d{1,2}\/\d{4}\b)|(\b\d{4}-\d{2}-\d{2}\b)/);
   if (dateMatch) {
@@ -224,6 +276,7 @@ export async function parseACD(input, creditCard) {
   }
 
   const handlingFee = extractHandlingFee(input);
+  const realTotal = extractTotal(input);
 
   const output = {
     "PaymentType": "CreditCard",
@@ -242,6 +295,7 @@ export async function parseACD(input, creditCard) {
 
   const lines = input.split('\n');
   const itemMainPattern = /^([A-Z][A-Z0-9]*)\s+([\d.]+)\s+(\d{1,4})(.+?)([A-Z]{2,5})$/;
+  let addedTotal = 0;
 
   for (let i = 0; i < lines.length; i++) {
     const itemMatch = lines[i].match(itemMainPattern);
@@ -272,6 +326,7 @@ export async function parseACD(input, creditCard) {
         "Qty": qty
       }
     });
+    addedTotal += amount || 0;
   }
 
   if (handlingFee !== null) {
@@ -287,6 +342,16 @@ export async function parseACD(input, creditCard) {
       }
     });
   }
-
-  return { output };
+  output["Line"].push({
+    "DetailType": "AccountBasedExpenseLineDetail",
+    "Amount": Math.round((realTotal - addedTotal - (handlingFee || 0)) * 100) / 100,
+    "Description": "Rounding Variance",
+    "AccountBasedExpenseLineDetail": {
+      "AccountRef": {
+        "value": "1150040007",
+        "name": "Rounding Variance"
+      }
+    }
+  });
+  return { output, realTotal };
 }
