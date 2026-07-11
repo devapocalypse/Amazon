@@ -48,9 +48,27 @@ export async function parseUniversal(input, creditCard) {
     return output;
   }
 
+  function extractFreight(text) {
+    const normalized = text.replace(/,/g, '');
+    const patterns = [
+      /extended\s*area\s*charge\b[^\n\r$]{0,60}?\$\s*(-?\d+(?:\.\d{1,2})?)/i,
+      /\$\s*(-?\d+(?:\.\d{1,2})?)\s*extended\s*area\s*charge/i
+    ];
+
+    for (const pattern of patterns) {
+      const match = normalized.match(pattern);
+      if (!match) continue;
+      const fee = parseFloat(match[1]);
+      if (!Number.isNaN(fee)) return Math.round(fee * 100) / 100;
+    }
+
+    return null;
+  }
+
   const upcIndexes = indexOfUPC(input);
   const items = splitInput(input, upcIndexes);
   const handlingFee = extractHandlingFee(input);
+  const freight = extractFreight(input);
 
   let date;
   const dateMatch = input.match(/(\b\d{1,2}\/\d{1,2}\/\d{4}\b)|(\b\d{4}-\d{2}-\d{2}\b)/);
@@ -131,6 +149,20 @@ export async function parseUniversal(input, creditCard) {
         "AccountRef": {
           "value": "1150040006",
           "name": "Handling Fee"
+        }
+      }
+    });
+  }
+
+  if (freight !== null) {
+    output["Line"].push({
+      "DetailType": "AccountBasedExpenseLineDetail",
+      "amount": freight,
+      "Description": "Freight",
+      "AccountBasedExpenseLineDetail": {
+        "AccountRef": {
+          "value": "1150040016",
+          "name": "Freight"
         }
       }
     });

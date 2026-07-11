@@ -8,14 +8,14 @@ export default defineConfig({
     proxy: {
       // Proxy API requests starting with /api to the backend
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://localhost:4000',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/api/, '/api')
       },
       // Proxy websocket requests if your backend uses them
       '/socket': {
-        target: 'ws://localhost:5000',
+        target: 'ws://localhost:4000',
         ws: true,
         changeOrigin: true,
       }
