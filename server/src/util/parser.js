@@ -70,6 +70,15 @@ export async function parseUniversal(input, creditCard) {
   const handlingFee = extractHandlingFee(input);
   const freight = extractFreight(input);
 
+  // Fetch all known Universal vendor codes once, sorted longest-first for greedy prefix matching
+  const knownVendorRows = await pool.query(
+    'SELECT universal_id FROM inventory.converter WHERE universal_id IS NOT NULL AND universal_id <> \'\''
+  );
+  const knownVendors = knownVendorRows.rows
+    .map(r => r.universal_id)
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length);
+
   let date;
   const dateMatch = input.match(/(\b\d{1,2}\/\d{1,2}\/\d{4}\b)|(\b\d{4}-\d{2}-\d{2}\b)/);
   if (dateMatch) date = dateMatch[0];
@@ -91,10 +100,11 @@ export async function parseUniversal(input, creditCard) {
 
   for (const item of items) {
     const firstLine = item.split('\n').find(l => l.trim().length > 0) || '';
-    // Format: [12-13 digit UPC][vendor code (0-4 letters + 3-5 digits)][description]
-    // Non-greedy UPC match so 12-digit UPCs followed by digit-only vendor codes work correctly
-    const vendorMatch = firstLine.match(/^(?:\d{12,13}?)([A-Z]{0,4}\d{3,5})/);
-    const vendorNum = vendorMatch ? vendorMatch[1] : '';
+    // Capture all contiguous uppercase alphanumeric chars after the UPC as a candidate vendor string,
+    // then resolve against known vendor codes to handle cases where the PDF omits the column space.
+    const rawMatch = firstLine.match(/^(?:\d{12,13}?) *([A-Z0-9]{3,})/);
+    const rawVendor = rawMatch ? rawMatch[1] : '';
+    const vendorNum = knownVendors.find(v => rawVendor.startsWith(v)) || rawVendor;
 
     const dollarIndex = item.indexOf('$');
     let quantity = null;
@@ -114,8 +124,9 @@ export async function parseUniversal(input, creditCard) {
 
     // Find description from the full pre-price section to preserve multiline names
     const beforePricing = dollarIndex !== -1 ? item.slice(0, dollarIndex) : item;
+    const vendorEscaped = vendorNum.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const description = beforePricing
-      .replace(/^\s*\d{12,13}(?:[A-Z]{0,4}\d{3,5})\s*/, '')
+      .replace(new RegExp(`^\\s*\\d{12,13} *${vendorEscaped}\\s*`), '')
       .replace(/\s*\b\d+\s*$/m, '')
       .replace(/\s+/g, ' ')
       .trim();
