@@ -81,7 +81,15 @@ export async function parseUniversal(input, creditCard) {
 
   let date;
   const dateMatch = input.match(/(\b\d{1,2}\/\d{1,2}\/\d{4}\b)|(\b\d{4}-\d{2}-\d{2}\b)/);
-  if (dateMatch) date = dateMatch[0];
+  if (dateMatch) {
+    const raw = dateMatch[0];
+    if (raw.includes('/')) {
+      const [m, d, y] = raw.split('/');
+      date = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    } else {
+      date = raw;
+    }
+  }
 
   const output = {
     "PaymentType": "CreditCard",
@@ -137,7 +145,7 @@ export async function parseUniversal(input, creditCard) {
     const amazonId = idResult.rows[0]?.amazon_id ?? 'Unknown';
     output["Line"].push({ 
       "DetailType": "ItemBasedExpenseLineDetail",
-      "amount": amount,
+      "Amount": amount,
       "Description": description,
       "ItemBasedExpenseLineDetail": {
         "ItemRef": {
@@ -154,7 +162,7 @@ export async function parseUniversal(input, creditCard) {
   if (handlingFee !== null) {
     output["Line"].push({
       "DetailType": "AccountBasedExpenseLineDetail",
-      "amount": handlingFee,
+      "Amount": handlingFee,
       "Description": "Handling Fee",
       "AccountBasedExpenseLineDetail": {
         "AccountRef": {
@@ -168,7 +176,7 @@ export async function parseUniversal(input, creditCard) {
   if (freight !== null) {
     output["Line"].push({
       "DetailType": "AccountBasedExpenseLineDetail",
-      "amount": freight,
+      "Amount": freight,
       "Description": "Freight",
       "AccountBasedExpenseLineDetail": {
         "AccountRef": {
@@ -205,7 +213,15 @@ export async function parseACD(input, creditCard) {
 
   let date;
   const dateMatch = input.match(/(\b\d{1,2}\/\d{1,2}\/\d{4}\b)|(\b\d{4}-\d{2}-\d{2}\b)/);
-  if (dateMatch) date = dateMatch[0];
+  if (dateMatch) {
+    const raw = dateMatch[0];
+    if (raw.includes('/')) {
+      const [m, d, y] = raw.split('/');
+      date = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    } else {
+      date = raw;
+    }
+  }
 
   const handlingFee = extractHandlingFee(input);
 
@@ -245,7 +261,7 @@ export async function parseACD(input, creditCard) {
 
     output["Line"].push({
       "DetailType": "ItemBasedExpenseLineDetail",
-      "amount": amount,
+      "Amount": amount,
       "Description": description,
       "ItemBasedExpenseLineDetail": {
         "ItemRef": {
@@ -261,7 +277,7 @@ export async function parseACD(input, creditCard) {
   if (handlingFee !== null) {
     output["Line"].push({
       "DetailType": "AccountBasedExpenseLineDetail",
-      "amount": handlingFee,
+      "Amount": handlingFee,
       "Description": "Handling Fee",
       "AccountBasedExpenseLineDetail": {
         "AccountRef": {
