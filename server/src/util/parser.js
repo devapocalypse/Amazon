@@ -1,8 +1,8 @@
 import pool from '../util/db.js';
 
-function getAmazonId(vendor, id) {
+function getQuickBooksId(vendor, id) {
   const column = vendor === 'acd' ? 'acd_id' : 'universal_id';
-  return pool.query(`SELECT amazon_id FROM inventory.converter WHERE ${column} = $1`, [id]);
+  return pool.query(`SELECT qbo_id FROM inventory.converter WHERE ${column} = $1`, [id]);
 }
 
 export async function parseUniversal(input, creditCard) {
@@ -162,15 +162,15 @@ export async function parseUniversal(input, creditCard) {
     if (!vendorNum) continue;
     addedTotal += amount || 0;
     const key = vendorNum;
-    const idResult = await getAmazonId('universal', key);
-    const amazonId = idResult.rows[0]?.amazon_id ?? 'Unknown';
+    const idResult = await getQuickBooksId('universal', key);
+    const quickBooksId = idResult.rows[0]?.qbo_id ?? 'Unknown';
     output["Line"].push({ 
       "DetailType": "ItemBasedExpenseLineDetail",
       "Amount": amount,
       "Description": description,
       "ItemBasedExpenseLineDetail": {
         "ItemRef": {
-          "value": amazonId,
+          "value": quickBooksId,
           "name": key
         },
         "UnitPrice": unitPrice,
@@ -302,8 +302,8 @@ export async function parseACD(input, creditCard) {
     if (!itemMatch) continue;
 
     const key = itemMatch[1];
-    const idResult = await getAmazonId('acd', key);
-    const amazonId = idResult.rows[0]?.amazon_id ?? 'Unknown';
+    const idResult = await getQuickBooksId('acd', key);
+    const quickBooksId = idResult.rows[0]?.qbo_id ?? 'Unknown';
     const amount = parseFloat(itemMatch[2]);
     const qty = parseInt(itemMatch[3], 10);
     const description = itemMatch[4].trim();
@@ -319,7 +319,7 @@ export async function parseACD(input, creditCard) {
       "Description": description,
       "ItemBasedExpenseLineDetail": {
         "ItemRef": {
-          "value": amazonId,
+          "value": quickBooksId,
           "name": key
         },
         "UnitPrice": unitPrice,
