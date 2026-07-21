@@ -84,11 +84,28 @@ export async function parseUniversal(input, creditCard) {
     return null;
   }
 
+  function extractInvoiceNumber(text) {
+    const patterns = [
+      /invoice\s*(?:no\.?|number|#)\s*[:\-]?\s*(\S+)/i,
+      /inv(?:oice)?[\s\-#]*([A-Z0-9\-]+)/i,
+      /order\s*(?:no\.?|number|#)\s*[:\-]?\s*(\S+)/i
+    ];
+
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (!match) continue;
+      if (match[1]) return match[1].trim();
+    }
+
+    return null;
+  }
+
   const upcIndexes = indexOfUPC(input);
   const items = splitInput(input, upcIndexes);
   const handlingFee = extractHandlingFee(input);
   const freight = extractFreight(input);
   const realTotal = extractTotal(input);
+  const invoiceNumber = extractInvoiceNumber(input);
 
   // Fetch all known Universal vendor codes once, sorted longest-first for greedy prefix matching
   const knownVendorRows = await pool.query(
@@ -113,13 +130,14 @@ export async function parseUniversal(input, creditCard) {
 
   const output = {
     "PaymentType": "CreditCard",
+    "DocNumber": invoiceNumber,
     "AccountRef": {
       "value": creditCard.value,
       "name": creditCard.name
     },
     "TxnDate": date,
     "EntityRef": {
-      "value": "95", // Unknown
+      "value": "9",
       "name": "Universal Distribution",
       "type": "Vendor"
     },
@@ -263,6 +281,22 @@ export async function parseACD(input, creditCard) {
     return null;
   }
 
+  function extractInvoiceNumber(text) {
+    const patterns = [
+      /invoice\s*(?:no\.?|number|#)\s*[:\-]?\s*(\S+)/i,
+      /inv(?:oice)?[\s\-#]*([A-Z0-9\-]+)/i,
+      /order\s*(?:no\.?|number|#)\s*[:\-]?\s*(\S+)/i
+    ];
+
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (!match) continue;
+      if (match[1]) return match[1].trim();
+    }
+
+    return null;
+  }
+
   let date;
   const dateMatch = input.match(/(\b\d{1,2}\/\d{1,2}\/\d{4}\b)|(\b\d{4}-\d{2}-\d{2}\b)/);
   if (dateMatch) {
@@ -277,9 +311,11 @@ export async function parseACD(input, creditCard) {
 
   const handlingFee = extractHandlingFee(input);
   const realTotal = extractTotal(input);
+  const invoiceNumber = extractInvoiceNumber(input);
 
   const output = {
     "PaymentType": "CreditCard",
+    "DocNumber": invoiceNumber,
     "AccountRef": {
       "value": creditCard.value,
       "name": creditCard.name

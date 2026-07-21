@@ -16,6 +16,9 @@ const pdf = require('pdf-parse');
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+const QBO_EXPENSE_URL = process.env.QBO_EXPENSE_URL || 'http://127.0.0.1:5000/api/upload-expense';
+const QBO_BILL_URL = process.env.QBO_BILL_URL || 'http://127.0.0.1:5000/api/upload-bill';
+
 app.use(cors());
 app.use(bodyParser.json());
 
@@ -27,6 +30,24 @@ const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
 const indexHtml = path.join(clientDist, 'index.html');
 
 const upload = multer({ storage: multer.memoryStorage() });
+
+async function pushToQuickBooks(qboPayload, url) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(qboPayload)
+  });
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    // Surface Flask/QuickBooks's actual error message rather than a generic one
+    const message = result && result.message ? result.message : `Upload failed with status ${response.status}`;
+    throw new Error(message);
+  }
+
+  return result;
+}
 
 app.post('/api/parseUniversal', upload.single('file'), async (req, res) => {
   try {
@@ -44,8 +65,8 @@ app.post('/api/parseUniversal', upload.single('file'), async (req, res) => {
     switch (req.body.creditCard) {
       case 'WB_COMMUNITY':
         creditCard = {
-          value: process.env.WB_COMMUNITY_ID,
-          name: "WB Community Business (2696)"
+          value: process.env.WB_CREDIT_ID,
+          name: "Westbury Credit Card"
         }
         break;
 
@@ -57,7 +78,9 @@ app.post('/api/parseUniversal', upload.single('file'), async (req, res) => {
     }
 
     const result = await parseUniversal(inputText, creditCard);
-    res.json(result);
+    const qboResult = await pushToQuickBooks(result.output, QBO_EXPENSE_URL);
+
+    res.json({ parsed: result.output, quickbooks: qboResult });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
@@ -77,23 +100,10 @@ app.post('/api/parseACD', upload.single('file'), async (req, res) => {
 
     let creditCard;
 
-    switch (req.body.creditCard) {
-      case 'WB_COMMUNITY':
-        creditCard = {
-          value: process.env.WB_COMMUNITY_ID,
-          name: "WB Community Business (2696)"
-        }
-        break;
-
-      default:
-        creditCard = {
-          value: "Unknown",
-          name: "Unknown"
-        }
-    }
-
     const result = await parseACD(inputText, creditCard);
-    res.json(result);
+    const qboResult = await pushToQuickBooks(result.output, QBO_BILL_URL);
+
+    res.json({ parsed: result.output, quickbooks: qboResult });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
