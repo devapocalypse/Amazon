@@ -309,23 +309,25 @@ export async function parseACD(input, creditCard) {
     }
   }
 
+  function addDays(dateString, days) {
+    if (!dateString) return undefined;
+    const [y, m, d] = dateString.split('-').map(Number);
+    const parsed = new Date(Date.UTC(y, m - 1, d));
+    parsed.setUTCDate(parsed.getUTCDate() + days);
+    return parsed.toISOString().slice(0, 10);
+  }
+
   const handlingFee = extractHandlingFee(input);
   const realTotal = extractTotal(input);
   const invoiceNumber = extractInvoiceNumber(input);
 
   const output = {
-    "PaymentType": "CreditCard",
-    "DocNumber": invoiceNumber,
-    "AccountRef": {
-      "value": creditCard.value,
-      "name": creditCard.name
+    "VendorRef": {
+      "value": "11"
     },
     "TxnDate": date,
-    "EntityRef": {
-      "value": "11",
-      "name": "ACD Distribution",
-      "type": "Vendor"
-    },
+    "DueDate": addDays(date, 30),
+    "DocNumber": invoiceNumber,
     "Line": []
   };
 
@@ -355,8 +357,7 @@ export async function parseACD(input, creditCard) {
       "Description": description,
       "ItemBasedExpenseLineDetail": {
         "ItemRef": {
-          "value": quickBooksId,
-          "name": key
+          "value": quickBooksId
         },
         "UnitPrice": unitPrice,
         "Qty": qty
@@ -372,8 +373,7 @@ export async function parseACD(input, creditCard) {
       "Description": "Handling Fee",
       "AccountBasedExpenseLineDetail": {
         "AccountRef": {
-          "value": "Unknown",
-          "name": "Handling Fee"
+          "value": "1150040006"
         }
       }
     });
@@ -384,8 +384,7 @@ export async function parseACD(input, creditCard) {
     "Description": "Rounding Variance",
     "AccountBasedExpenseLineDetail": {
       "AccountRef": {
-        "value": "1150040007",
-        "name": "Rounding Variance"
+        "value": "1150040007"
       }
     }
   });
