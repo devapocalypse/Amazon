@@ -146,11 +146,40 @@ export async function parseUniversal(input, creditCard) {
 
   for (const item of items) {
     const firstLine = item.split('\n').find(l => l.trim().length > 0) || '';
-    // Capture all contiguous uppercase alphanumeric chars after the UPC as a candidate vendor string,
-    // then resolve against known vendor codes to handle cases where the PDF omits the column space.
-    const rawMatch = firstLine.match(/^(?:\d{12,13}?) *([A-Z0-9]{3,})/);
-    const rawVendor = rawMatch ? rawMatch[1] : '';
-    const vendorNum = knownVendors.find(v => rawVendor.startsWith(v)) || rawVendor;
+    // Find where the vendor code ends. The PDF sometimes omits the column
+    // space, gluing the vendor code directly onto the description with no
+    // delimiter (e.g. "AT-38110DRAGON SHIELD..."), and vendor codes can
+    // contain a hyphen -- a character class can't reliably capture that
+    // (it either excludes hyphens and truncates early, or includes them
+    // and bleeds into the description). UPCs are also 12 or 13 digits, and
+    // when the vendor code itself is numeric (e.g. "16506") there's no
+    // character-level way to tell where the UPC ends and the code begins.
+    // So try both possible UPC lengths and check the actual known vendor
+    // list (longest-first) as a literal prefix of what's left -- whichever
+    // length yields a real match is the correct split.
+    let vendorNum = '';
+    let vendorEndIndex = -1;
+    for (const upcLen of [13, 12]) {
+      const upcCandidate = firstLine.slice(0, upcLen);
+      if (upcCandidate.length !== upcLen || !/^\d+$/.test(upcCandidate)) continue;
+      const afterUpc = firstLine.slice(upcLen);
+      const stripped = afterUpc.replace(/^ +/, '');
+      const match = knownVendors.find(v => stripped.startsWith(v));
+      if (match) {
+        vendorNum = match;
+        vendorEndIndex = upcLen + (afterUpc.length - stripped.length) + match.length;
+        break;
+      }
+    }
+
+    if (!vendorNum) {
+      // Not a known vendor code yet -- best-effort candidate (only used
+      // for the Unknown-item log/description) until it's added to
+      // inventory.converter, at which point the match above picks it up.
+      const rawMatch = firstLine.match(/^\d{12,13}? *([A-Z0-9-]{3,})/);
+      vendorNum = rawMatch ? rawMatch[1] : '';
+      vendorEndIndex = rawMatch ? rawMatch[0].length : -1;
+    }
 
     const dollarIndex = item.indexOf('$');
     let quantity = null;
@@ -170,9 +199,7 @@ export async function parseUniversal(input, creditCard) {
 
     // Find description from the full pre-price section to preserve multiline names
     const beforePricing = dollarIndex !== -1 ? item.slice(0, dollarIndex) : item;
-    const vendorEscaped = vendorNum.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const description = beforePricing
-      .replace(new RegExp(`^\\s*\\d{12,13} *${vendorEscaped}\\s*`), '')
+    const description = (vendorEndIndex >= 0 ? beforePricing.slice(vendorEndIndex) : beforePricing)
       .replace(/\s*\b\d+\s*$/m, '')
       .replace(/\s+/g, ' ')
       .trim();
