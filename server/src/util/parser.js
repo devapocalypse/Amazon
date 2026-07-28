@@ -355,7 +355,7 @@ export async function parseACD(input, creditCard) {
     "TxnDate": date,
     // TODO: replace with the actual QuickBooks Term.Id for "Net 30" (unknown for this company)
     "SalesTermRef": {
-      "value": "TODO_NET_30_TERM_ID",
+      "value": "3",
       "name": "Net 30"
     },
     "DueDate": addDays(date, 30),
