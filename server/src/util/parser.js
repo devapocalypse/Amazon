@@ -363,8 +363,14 @@ export async function parseACD(input, creditCard) {
   };
 
   const lines = input.split('\n');
-  const itemMainPattern = /^([A-Z][A-Z0-9]*)\s+([\d.]+)\s+(\d{1,4})(.+?)([A-Z]{2,5})$/;
-  let addedTotal = 0;
+  // ACD's "Pricing" column (e.g. "SDI") is glued directly onto the end of
+  // the description with no separating space when present, but only shows
+  // up on some rows -- there's no formatting cue to tell where a real
+  // description ends and a glued-on code begins, so match against a known
+  // list instead of guessing from case. Add to this list if ACD introduces
+  // new codes. Vendor codes can contain a hyphen (e.g. "CAO23166-H").
+  const PRICING_CODES = ['SDI'];
+  const itemMainPattern = /^([A-Z][A-Z0-9-]*)\s+([\d.]+)\s+(\d{1,4})(.+)$/;
 
   for (let i = 0; i < lines.length; i++) {
     const itemMatch = lines[i].match(itemMainPattern);
@@ -375,7 +381,13 @@ export async function parseACD(input, creditCard) {
     const quickBooksId = idResult.rows[0]?.qbo_id ?? 'Unknown';
     const amount = parseFloat(itemMatch[2]);
     const qty = parseInt(itemMatch[3], 10);
-    const description = itemMatch[4].trim();
+    let description = itemMatch[4].trim();
+    for (const code of PRICING_CODES) {
+      if (description.endsWith(code)) {
+        description = description.slice(0, -code.length).trim();
+        break;
+      }
+    }
 
     let unitPrice = Math.round((amount / qty) * 100) / 100;
     const priceLine = (lines[i + 2] || '').trim();
@@ -394,7 +406,6 @@ export async function parseACD(input, creditCard) {
         "Qty": qty
       }
     });
-    addedTotal += amount || 0;
   }
 
   if (handlingFee !== null) {
@@ -409,15 +420,5 @@ export async function parseACD(input, creditCard) {
       }
     });
   }
-  output["Line"].push({
-    "DetailType": "AccountBasedExpenseLineDetail",
-    "Amount": Math.round((realTotal - addedTotal - (handlingFee || 0)) * 100) / 100,
-    "Description": "Rounding Variance",
-    "AccountBasedExpenseLineDetail": {
-      "AccountRef": {
-        "value": "1150040007"
-      }
-    }
-  });
   return { output, realTotal };
 }
