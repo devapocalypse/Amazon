@@ -13,6 +13,12 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const pdf = require('pdf-parse');
 
+import amazonSalesRouter from './routes/amazonSales.js';
+import amazonFeesRouter from './routes/amazonFees.js';
+import amazonRefundsRouter from './routes/amazonRefunds.js';
+import amazonReimbursementsRouter from './routes/amazonReimbursements.js';
+import amazonSettlementRouter from './routes/amazonSettlement.js';
+
 const app = express();
 const PORT = process.env.PORT || 4000;
 
@@ -23,6 +29,12 @@ app.use(cors());
 app.use(bodyParser.json());
 
 app.use(bodyParser.urlencoded({ extended: true }));
+
+app.use('/api', amazonSalesRouter);
+app.use('/api', amazonFeesRouter);
+app.use('/api', amazonRefundsRouter);
+app.use('/api', amazonReimbursementsRouter);
+app.use('/api', amazonSettlementRouter);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -115,6 +127,6 @@ app.get(/.*/, (req, res) => {
   res.sendFile(indexHtml);
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '127.0.0.1', () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
