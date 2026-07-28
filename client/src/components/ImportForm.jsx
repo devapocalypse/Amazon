@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 
-function ImportForm() {
+function ImportForm({ hasCreditCard, action, title, description }) {
   const [error, setError] = useState("");
   const [creditCard, setCreditCard] = useState("");
   const fileInputRef = useRef(null);
@@ -24,7 +24,7 @@ function ImportForm() {
     setError(null);
     const f = fileInputRef.current?.files?.[0];
 
-    if (!creditCard) {
+    if (hasCreditCard && !creditCard) {
       e.preventDefault();
       setError("Please select a credit card.");
       return;
@@ -43,45 +43,49 @@ function ImportForm() {
   }
 
   return (
-    <form
-      id="upload-form"
-      method="post"
-      action="/api/parseUniversal"
-      encType="multipart/form-data"
-      onSubmit={handleSubmit}
-    >
-      <label htmlFor="file">Click to Pick a File</label>
+    <div className="import-form">
+      <h2>{title}</h2>
+      <p>{description}</p>
 
-      <input
-        type="file"
-        id="file"
-        name="file"
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        accept="application/pdf"
-      />
-
-      <select
-        name="creditCard"
-        id="creditCard"
-        value={creditCard}
-        onChange={(e) => setCreditCard(e.target.value)}
+      <form
+        id="upload-form"
+        method="post"
+        action={action}
+        encType="multipart/form-data"
+        onSubmit={handleSubmit}
       >
-        <option value="" disabled hidden>
-          Select Credit Card
-        </option>
-        <option value="WB_COMMUNITY">WB Community Business (2696)</option>
-      </select>
+        <label htmlFor="file">Click to Pick a File</label>
 
-      {error && <div>{error}</div>}
+        <input
+          type="file"
+          id="file"
+          name="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          accept="application/pdf"
+        />
 
-      <button type="submit" className="upload-submit-button" formAction="/api/parseUniversal">
-        Submit (Universal)
-      </button>
-      <button type="submit" className="upload-submit-button" formAction="/api/parseACD">
-        Submit (ACD)
-      </button>
-    </form>
+        {hasCreditCard && (
+          <select
+            name="creditCard"
+            id="creditCard"
+            value={creditCard}
+            onChange={(e) => setCreditCard(e.target.value)}
+          >
+            <option value="" disabled hidden>
+              Select Credit Card
+            </option>
+            <option value="WB_COMMUNITY">WB Credit Card</option>
+          </select>
+        )}
+
+        {error && <div className="error">{error}</div>}
+
+        <button type="submit" className="upload-submit-button">
+          Submit
+        </button>
+      </form>
+    </div>
   );
 }
 
