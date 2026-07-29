@@ -1,6 +1,7 @@
-import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, NavLink } from "react-router-dom";
 import "./App.css";
 import ImportForm from "./components/ImportForm";
+import Success from "./components/Success";
 import AmazonSalesSync from "./components/AmazonSalesSync";
 import AmazonFeesPull from "./components/AmazonFeesPull";
 import AmazonRefundsPull from "./components/AmazonRefundsPull";
@@ -18,7 +19,7 @@ function App() {
         <h1>Amazon Business Helper</h1>
 
         <nav>
-          <NavLink to="/" end>
+          <NavLink to="/universal-invoices" end>
             Universal Invoices
           </NavLink>
           <NavLink to="/acd-invoices">ACD Invoices</NavLink>
@@ -31,8 +32,9 @@ function App() {
 
         <main>
           <Routes>
+            <Route path="/" element={<Navigate to="/universal-invoices" replace />} />
             <Route
-              path="/"
+              path="/universal-invoices"
               element={
                 <ImportForm
                   hasCreditCard
@@ -58,6 +60,7 @@ function App() {
             <Route path="/amazon-refunds" element={<AmazonRefundsPull />} />
             <Route path="/amazon-reimbursements" element={<AmazonReimbursementsPull />} />
             <Route path="/amazon-settlement" element={<AmazonSettlementReconciliation />} />
+            <Route path="/success" element={<Success />} />
           </Routes>
         </main>
       </div>

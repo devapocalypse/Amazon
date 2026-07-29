@@ -188,3 +188,118 @@ details pre {
   overflow-x: auto;
   font-size: 0.85rem;
 }
+
+.results > pre {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 12px;
+  overflow-x: auto;
+  font-size: 0.85rem;
+}
+
+.json-viewer {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #333a44;
+  background: #1e1e1e;
+}
+
+.json-viewer-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #2d2d2d;
+  border-bottom: 1px solid #333a44;
+}
+
+.json-viewer-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.json-viewer-dot-red {
+  background: #ff5f56;
+}
+
+.json-viewer-dot-yellow {
+  background: #ffbd2e;
+}
+
+.json-viewer-dot-green {
+  background: #27c93f;
+}
+
+.json-viewer-label {
+  margin-left: 8px;
+  color: #9aa4af;
+  font-size: 0.8rem;
+  font-family: Consolas, "Courier New", monospace;
+}
+
+.json-viewer-body {
+  margin: 0;
+  padding: 14px 16px;
+  max-height: 420px;
+  overflow: auto;
+  color: #d4d4d4;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  user-select: text;
+}
+
+.success {
+  color: #166534;
+  background: #eafaf1;
+  border: 1px solid #bde5c8;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.import-form-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--color-border);
+}
+
+.checkbox-field {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.checkbox-field input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+.import-success {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.back-link {
+  align-self: flex-start;
+  color: var(--color-primary);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}

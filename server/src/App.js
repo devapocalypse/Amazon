@@ -75,7 +75,7 @@ app.post('/api/parseUniversal', upload.single('file'), async (req, res) => {
     }
 
     switch (req.body.creditCard) {
-      case 'WB_COMMUNITY':
+      case 'WB_CREDIT':
         creditCard = {
           value: process.env.WB_CREDIT_ID,
           name: "Westbury Credit Card"
