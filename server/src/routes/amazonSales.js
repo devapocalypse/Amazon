@@ -1,7 +1,12 @@
 import { Router } from 'express';
 import { execFile } from 'child_process';
+import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 const PYTHON_BIN = process.env.AMAZON_SALES_PYTHON || '/root/Amazon_Automation/venv/bin/python';
 const SCRIPT_DIR = process.env.AMAZON_SALES_DIR || '/root/Amazon_Automation';
@@ -75,6 +80,40 @@ router.post('/syncAmazonSales', (req, res) => {
     { cwd: SCRIPT_DIR, maxBuffer: 20 * 1024 * 1024, timeout: 10 * 60 * 1000 },
     (err, stdout, stderr) => {
       syncInProgress = false;
+      const raw = `${stdout || ''}${stderr || ''}`;
+
+      if (err && !stdout) {
+        return res.status(500).json({ error: `Sync failed to run: ${err.message}`, raw });
+      }
+
+      res.json({ summary: parseSummary(raw), raw });
+    }
+  );
+});
+
+router.post('/syncAmazonSalesFromFile', upload.single('file'), (req, res) => {
+  if (!req.file || !req.file.buffer || !req.file.buffer.length) {
+    return res.status(400).json({ error: 'No file uploaded.' });
+  }
+
+  if (syncInProgress) {
+    return res.status(409).json({ error: 'A sync is already running -- wait for it to finish.' });
+  }
+
+  syncInProgress = true;
+
+  const tmpPath = path.join(os.tmpdir(), `amazon_sales_upload_${Date.now()}.txt`);
+  fs.writeFileSync(tmpPath, req.file.buffer);
+
+  const args = ['amazon_sales.py', '--file', tmpPath];
+
+  execFile(
+    PYTHON_BIN,
+    args,
+    { cwd: SCRIPT_DIR, maxBuffer: 20 * 1024 * 1024, timeout: 10 * 60 * 1000 },
+    (err, stdout, stderr) => {
+      syncInProgress = false;
+      fs.unlink(tmpPath, () => {});
       const raw = `${stdout || ''}${stderr || ''}`;
 
       if (err && !stdout) {
