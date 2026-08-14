@@ -99,7 +99,7 @@ app.post('/api/parseUniversal', upload.single('file'), async (req, res) => {
     const result = await parseUniversal(inputText, creditCard);
     const qboResult = await pushToQuickBooks(result.output, QBO_EXPENSE_URL);
 
-    res.json({ parsed: result.output, quickbooks: qboResult });
+    res.json({ parsed: result.output, quickbooks: qboResult, unmappedItems: result.unmappedItems || [] });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
@@ -122,7 +122,7 @@ app.post('/api/parseACD', upload.single('file'), async (req, res) => {
     const result = await parseACD(inputText, creditCard);
     const qboResult = await pushToQuickBooks(result.output, QBO_BILL_URL);
 
-    res.json({ parsed: result.output, quickbooks: qboResult });
+    res.json({ parsed: result.output, quickbooks: qboResult, unmappedItems: result.unmappedItems || [] });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }

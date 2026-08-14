@@ -1,5 +1,6 @@
 import { useLocation, Navigate, Link } from "react-router-dom";
 import JsonViewer from "./JsonViewer";
+import UnmappedItems from "./UnmappedItems";
 
 function Success() {
   const location = useLocation();
@@ -16,6 +17,8 @@ function Success() {
     <div className="import-success">
       <h2>{title || "Submitted"}</h2>
       <div className="success">✓ Invoice submitted successfully.</div>
+
+      <UnmappedItems items={result.unmappedItems} />
 
       {showRawJson && <JsonViewer data={result} />}
 

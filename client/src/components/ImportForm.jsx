@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import JsonViewer from "./JsonViewer";
+import UnmappedItems from "./UnmappedItems";
 
 function ImportForm({ hasCreditCard, action, title, description }) {
   const navigate = useNavigate();
@@ -150,9 +151,10 @@ function ImportForm({ hasCreditCard, action, title, description }) {
         </div>
       </form>
 
-      {result && showRawJson && (
+      {result && (
         <div className="results">
-          <JsonViewer data={result} />
+          <UnmappedItems items={result.unmappedItems} />
+          {showRawJson && <JsonViewer data={result} />}
         </div>
       )}
     </div>

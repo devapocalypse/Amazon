@@ -186,6 +186,13 @@ export async function parseUniversal(input, creditCard) {
     "Line": []
   };
 
+  // Line items that have no qbo_id mapped in inventory.converter get
+  // pushed to QuickBooks against the "Unknown" placeholder item (resolved
+  // to the real placeholder/dummy item server-side, in qbo_expenses.py).
+  // Collected here so the upload UI can show Craig exactly what still
+  // needs to be created in QuickBooks, instead of just a success message.
+  const unmappedItems = [];
+
   for (const item of items) {
     const firstLine = item.split('\n').find(l => l.trim().length > 0) || '';
     // Find where the vendor code ends. The PDF sometimes omits the column
@@ -278,6 +285,16 @@ export async function parseUniversal(input, creditCard) {
     const key = vendorNum;
     const idResult = await getQuickBooksId('universal', key);
     const quickBooksId = idResult.rows[0]?.qbo_id ?? 'Unknown';
+
+    if (quickBooksId === 'Unknown') {
+      unmappedItems.push({
+        vendorCode: key,
+        description,
+        qty: quantity,
+        amount
+      });
+    }
+
     output["Line"].push({
       "DetailType": "ItemBasedExpenseLineDetail",
       "Amount": amount,
@@ -334,7 +351,7 @@ export async function parseUniversal(input, creditCard) {
     }
   });
 
-  return { output };
+  return { output, unmappedItems };
 }
 
 export async function parseACD(input, creditCard) {
@@ -431,6 +448,13 @@ export async function parseACD(input, creditCard) {
     "Line": []
   };
 
+  // Line items that have no qbo_id mapped in inventory.converter get
+  // pushed to QuickBooks against the "Unknown" placeholder item (resolved
+  // to the real placeholder/dummy item server-side, in qbo_expenses.py).
+  // Collected here so the upload UI can show Craig exactly what still
+  // needs to be created in QuickBooks, instead of just a success message.
+  const unmappedItems = [];
+
   const lines = input.split('\n');
   // ACD's "Pricing" column (e.g. "SDI") is glued directly onto the end of
   // the description with no separating space when present, but only shows
@@ -463,6 +487,15 @@ export async function parseACD(input, creditCard) {
     const priceMatch = priceLine.match(/^([\d.]+)/);
     if (priceMatch) unitPrice = parseFloat(priceMatch[1]);
 
+    if (quickBooksId === 'Unknown') {
+      unmappedItems.push({
+        vendorCode: key,
+        description,
+        qty,
+        amount
+      });
+    }
+
     output["Line"].push({
       "DetailType": "ItemBasedExpenseLineDetail",
       "Amount": amount,
@@ -489,6 +522,5 @@ export async function parseACD(input, creditCard) {
       }
     });
   }
-  return { output, realTotal };
+  return { output, realTotal, unmappedItems };
 }
-
