@@ -1,15 +1,17 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 
 function AmazonSettlementReconciliation() {
   const [fundDate, setFundDate] = useState("");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
+  const [candidates, setCandidates] = useState(null); // multiple settlements funding the same day -- pick one
+  const [activeGroupId, setActiveGroupId] = useState(null); // the settlement actually loaded into `result`, so post-transfer/true-up re-runs target it directly instead of re-resolving by date (which would just hit the picker again)
 
-  async function runReconciliation({ postTransfer = false, trueUpFees = false, force = false } = {}) {
+  async function runReconciliation({ groupId = null, postTransfer = false, trueUpFees = false, force = false } = {}) {
     setError("");
 
-    if (!fundDate) {
+    if (!groupId && !fundDate) {
       setError("Please pick the settlement's fund date.");
       return;
     }
@@ -34,20 +36,27 @@ function AmazonSettlementReconciliation() {
 
     setRunning(true);
     setResult(null);
+    setCandidates(null);
 
     try {
       const response = await fetch("/api/reconcileAmazonSettlement", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fundDate, postTransfer, trueUpFees, force }),
+        body: JSON.stringify({ fundDate, groupId, postTransfer, trueUpFees, force }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
         setError(data.error || `Reconciliation failed with status ${response.status}`);
+      } else if (data.multiple_settlements) {
+        // More than one settlement funds on this date -- don't guess which
+        // one Craig means, let him pick (was previously a silent
+        // first-match guess; see docs/tracker.md 2026-08-09).
+        setCandidates(data.multiple_settlements);
       } else {
         setResult(data);
+        setActiveGroupId(data.group_id);
       }
     } catch (err) {
       setError(String(err));
@@ -90,6 +99,34 @@ function AmazonSettlementReconciliation() {
 
       {error && <div className="error">{error}</div>}
 
+      {candidates && (
+        <div className="settlement-picker">
+          <p>{candidates.length} settlements fund on {fundDate} -- pick one:</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Amount</th>
+                <th>Period</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {candidates.map((c) => (
+                <tr key={c.group_id}>
+                  <td>${c.amount}</td>
+                  <td>{c.period_start} to {c.period_end}</td>
+                  <td>
+                    <button onClick={() => runReconciliation({ groupId: c.group_id })} disabled={running}>
+                      Reconcile this one
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {result && (
         <div className="results">
           <h3>
@@ -117,11 +154,11 @@ function AmazonSettlementReconciliation() {
             ) : (
               <>
                 {result.transfer_skipped_reason && <p>Not posted: {result.transfer_skipped_reason}</p>}
-                <button onClick={() => runReconciliation({ postTransfer: true })} disabled={running}>
+                <button onClick={() => runReconciliation({ groupId: activeGroupId, postTransfer: true })} disabled={running}>
                   Post bank transfer
                 </button>
                 {hasRedFlags && (
-                  <button onClick={() => runReconciliation({ postTransfer: true, force: true })} disabled={running}>
+                  <button onClick={() => runReconciliation({ groupId: activeGroupId, postTransfer: true, force: true })} disabled={running}>
                     Post anyway (--force)
                   </button>
                 )}
@@ -212,11 +249,11 @@ function AmazonSettlementReconciliation() {
             ) : feeVariance.length > 0 ? (
               <>
                 {result.trueup_skipped_reason && <p>Not trued up: {result.trueup_skipped_reason}</p>}
-                <button onClick={() => runReconciliation({ trueUpFees: true })} disabled={running}>
+                <button onClick={() => runReconciliation({ groupId: activeGroupId, trueUpFees: true })} disabled={running}>
                   True up fees to actual
                 </button>
                 {hasRedFlags && (
-                  <button onClick={() => runReconciliation({ trueUpFees: true, force: true })} disabled={running}>
+                  <button onClick={() => runReconciliation({ groupId: activeGroupId, trueUpFees: true, force: true })} disabled={running}>
                     True up anyway (--force)
                   </button>
                 )}

@@ -120,6 +120,7 @@ function ImportForm({ hasCreditCard, action, title, description }) {
               Select Credit Card
             </option>
             <option value="WB_CREDIT">WB Credit Card</option>
+            <option value="CHASE_CREDIT">Chase Credit Card</option>
           </select>
         )}
 

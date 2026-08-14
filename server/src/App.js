@@ -1,4 +1,4 @@
-import dotenv from 'dotenv';
+﻿import dotenv from 'dotenv';
 dotenv.config();
 
 import express from 'express';
@@ -79,6 +79,13 @@ app.post('/api/parseUniversal', upload.single('file'), async (req, res) => {
         creditCard = {
           value: process.env.WB_CREDIT_ID,
           name: "Westbury Credit Card"
+        }
+        break;
+
+      case 'CHASE_CREDIT':
+        creditCard = {
+          value: process.env.CHASE_CREDIT_ID,
+          name: "Chase Credit Card"
         }
         break;
 

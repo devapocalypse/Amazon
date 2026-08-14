@@ -1,4 +1,4 @@
-import pool from '../util/db.js';
+﻿import pool from '../util/db.js';
 
 function getQuickBooksId(vendor, id) {
   const column = vendor === 'acd' ? 'acd_id' : 'universal_id';
@@ -31,6 +31,41 @@ export async function parseUniversal(input, creditCard) {
     let m;
     while ((m = re.exec(text)) !== null) {
       output.push(m.index);
+    }
+    return output;
+  }
+
+  // Find item-row-start indexes for items that have no UPC on file with
+  // Universal at all (some vendors, especially small-press games, only get
+  // a short internal item number instead of a real barcode). The PDF often
+  // glues the Item No. and Vendor No. columns together with zero space
+  // (e.g. "1107CPS1107Cradle of Civilization..."), so this can't depend on
+  // whitespace, and it also can't depend on the vendor code already being
+  // in inventory.converter -- that's exactly the case (a brand new item)
+  // where this needs to fire. Instead it uses a purely structural signal:
+  // every item row starts with a bare digit run (the Item No., any length)
+  // immediately followed by an uppercase letter (the Vendor No.) with zero
+  // space -- the only other rows in this document that start with a digit
+  // (address numbers, tracking numbers, the "2% Cash Discount Reversal"
+  // line) are always followed by a space, slash, hyphen, or end of line,
+  // never an uppercase letter glued straight on.
+  //
+  // A second, rarer shape: some Item Nos are themselves a short letter
+  // prefix plus digits with an embedded space (e.g. "ECG 025", not a bare
+  // digit run at all), immediately followed by the glued Vendor No/
+  // description with zero space (e.g. "ECG 025ECG025Atlantis Rising..."
+  // -- the whole item was getting silently absorbed into the previous
+  // item's segment since neither this nor the digit-run rule recognized
+  // it as a boundary). Same structural signal, just letter-prefixed.
+  function indexOfItemRowStarts(text) {
+    const output = [];
+    const lines = text.split('\n');
+    let offset = 0;
+    for (const line of lines) {
+      if (/^\d+(?=[A-Z])/.test(line) || /^[A-Z]{2,5} ?\d+(?=[A-Z])/.test(line)) {
+        output.push(offset);
+      }
+      offset += line.length + 1; // +1 for the '\n' consumed by split
     }
     return output;
   }
@@ -68,9 +103,9 @@ export async function parseUniversal(input, creditCard) {
   function extractTotal(text) {
     const normalized = text.replace(/,/g, '');
     const patterns = [
-      /invoice\s*total\s*[:\-]?\s*\$?\s*(\d+(?:\.\d{1,2})?)/i,
-      /order\s*total\s*[:\-]?\s*\$?\s*(\d+(?:\.\d{1,2})?)/i,
-      /\btotal\s*[:\-]?\s*\$?\s*(\d+(?:\.\d{1,2})?)/i,
+      /invoice\s*total\s*[:\-]?\s*\$\s*(\d+(?:\.\d{1,2})?)/i,
+      /order\s*total\s*[:\-]?\s*\$\s*(\d+(?:\.\d{1,2})?)/i,
+      /\btotal\s*[:\-]?\s*\$\s*(\d+(?:\.\d{1,2})?)/i,
       /\$\s*(\d+(?:\.\d{1,2})?)\s*total\b/i
     ];
 
@@ -100,13 +135,6 @@ export async function parseUniversal(input, creditCard) {
     return null;
   }
 
-  const upcIndexes = indexOfUPC(input);
-  const items = splitInput(input, upcIndexes);
-  const handlingFee = extractHandlingFee(input);
-  const freight = extractFreight(input);
-  const realTotal = extractTotal(input);
-  const invoiceNumber = extractInvoiceNumber(input);
-
   // Fetch all known Universal vendor codes once, sorted longest-first for greedy prefix matching
   const knownVendorRows = await pool.query(
     'SELECT universal_id FROM inventory.converter WHERE universal_id IS NOT NULL AND universal_id <> \'\''
@@ -115,6 +143,20 @@ export async function parseUniversal(input, creditCard) {
     .map(r => r.universal_id)
     .filter(Boolean)
     .sort((a, b) => b.length - a.length);
+
+  // Item boundaries come from two sources: any 12/13-digit UPC (the normal
+  // case), plus any line starting with a bare digit run immediately
+  // followed by an uppercase letter (items with no UPC on file). Merge and
+  // dedupe since a UPC line matches both.
+  const upcIndexes = indexOfUPC(input);
+  const itemRowIndexes = indexOfItemRowStarts(input);
+  const boundaryIndexes = Array.from(new Set([...upcIndexes, ...itemRowIndexes]));
+  const items = splitInput(input, boundaryIndexes);
+  const handlingFee = extractHandlingFee(input);
+  const freight = extractFreight(input);
+  const realTotal = extractTotal(input);
+  const invoiceNumber = extractInvoiceNumber(input);
+
   let addedTotal = 0;
   let date;
   const dateMatch = input.match(/(\b\d{1,2}\/\d{1,2}\/\d{4}\b)|(\b\d{4}-\d{2}-\d{2}\b)/);
@@ -172,11 +214,38 @@ export async function parseUniversal(input, creditCard) {
       }
     }
 
+    // Items Universal has no UPC on file for: Item No. is a short internal
+    // number (any length, not 12/13 digits) or absent entirely, immediately
+    // followed by the known vendor code -- with or without a space (the PDF
+    // glues these together as often as not).
+    if (!vendorNum) {
+      const digitMatch = firstLine.match(/^(\d+)(\s*)/);
+      const afterDigits = digitMatch ? firstLine.slice(digitMatch[0].length) : firstLine;
+      const match = knownVendors.find(v => afterDigits.startsWith(v));
+      if (match) {
+        vendorNum = match;
+        vendorEndIndex = (digitMatch ? digitMatch[0].length : 0) + match.length;
+      }
+    }
+
     if (!vendorNum) {
       // Not a known vendor code yet -- best-effort candidate (only used
       // for the Unknown-item log/description) until it's added to
       // inventory.converter, at which point the match above picks it up.
-      const rawMatch = firstLine.match(/^\d{12,13}? *([A-Z0-9-]{3,})/);
+      // Leading digits can be any length here, not just a 12/13-digit UPC
+      // (that case is already handled above) -- greedily consume all of
+      // them first so a short internal item number doesn't get confused
+      // with the start of the vendor code. The captured code must start
+      // with a letter (every real vendor code does) -- without that, a
+      // stray 12/13-digit number elsewhere in the document (a tracking
+      // number, etc.) can backtrack into treating its own trailing digits
+      // as a fake vendor code. Minimum 2 total characters (1 letter + 1
+      // more), not 3 -- some real vendor codes are exactly 2 characters
+      // (e.g. "PF" for Pathfinder Battles), and a 3-char minimum was
+      // silently dropping the whole item (not even showing "Unknown")
+      // whenever a short code like that was followed by a space before
+      // the description instead of being glued directly onto it.
+      const rawMatch = firstLine.match(/^\d*[ ]?([A-Z][A-Z0-9_-]{1,})/);
       vendorNum = rawMatch ? rawMatch[1] : '';
       vendorEndIndex = rawMatch ? rawMatch[0].length : -1;
     }
@@ -209,7 +278,7 @@ export async function parseUniversal(input, creditCard) {
     const key = vendorNum;
     const idResult = await getQuickBooksId('universal', key);
     const quickBooksId = idResult.rows[0]?.qbo_id ?? 'Unknown';
-    output["Line"].push({ 
+    output["Line"].push({
       "DetailType": "ItemBasedExpenseLineDetail",
       "Amount": amount,
       "Description": description,
@@ -292,9 +361,9 @@ export async function parseACD(input, creditCard) {
   function extractTotal(text) {
     const normalized = text.replace(/,/g, '');
     const patterns = [
-      /invoice\s*total\s*[:\-]?\s*\$?\s*(\d+(?:\.\d{1,2})?)/i,
-      /order\s*total\s*[:\-]?\s*\$?\s*(\d+(?:\.\d{1,2})?)/i,
-      /\btotal\s*[:\-]?\s*\$?\s*(\d+(?:\.\d{1,2})?)/i,
+      /invoice\s*total\s*[:\-]?\s*\$\s*(\d+(?:\.\d{1,2})?)/i,
+      /order\s*total\s*[:\-]?\s*\$\s*(\d+(?:\.\d{1,2})?)/i,
+      /\btotal\s*[:\-]?\s*\$\s*(\d+(?:\.\d{1,2})?)/i,
       /\$\s*(\d+(?:\.\d{1,2})?)\s*total\b/i
     ];
 
@@ -422,3 +491,4 @@ export async function parseACD(input, creditCard) {
   }
   return { output, realTotal };
 }
+

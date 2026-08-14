@@ -13,10 +13,10 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 let reconciliationInProgress = false;
 
 router.post('/reconcileAmazonSettlement', (req, res) => {
-  const { fundDate, postTransfer, trueUpFees, force } = req.body || {};
+  const { fundDate, groupId, postTransfer, trueUpFees, force } = req.body || {};
 
-  if (!fundDate || !DATE_RE.test(fundDate)) {
-    return res.status(400).json({ error: 'fundDate must be YYYY-MM-DD' });
+  if (!groupId && (!fundDate || !DATE_RE.test(fundDate))) {
+    return res.status(400).json({ error: 'fundDate must be YYYY-MM-DD (or pass groupId to target a specific settlement directly)' });
   }
 
   if (reconciliationInProgress) {
@@ -25,7 +25,20 @@ router.post('/reconcileAmazonSettlement', (req, res) => {
 
   reconciliationInProgress = true;
 
-  const args = ['amazon_settlement_reconciliation.py', '--fund-date', fundDate, '--json'];
+  const args = ['amazon_settlement_reconciliation.py', '--json'];
+  // groupId targets one settlement directly -- required when fundDate
+  // matches more than one (the script reports the choices instead of
+  // guessing; see the "multiple_settlements" response shape below). Send
+  // fundDate alongside it too, when we have it: the script uses that to
+  // load the settlement's real metadata (amount, fund date) for
+  // --post-transfer -- without it, --group-id alone can reconcile but
+  // can't post the bank transfer (no amount to post).
+  if (groupId) {
+    args.push('--group-id', groupId);
+    if (fundDate && DATE_RE.test(fundDate)) args.push('--fund-date', fundDate);
+  } else {
+    args.push('--fund-date', fundDate);
+  }
   if (postTransfer) args.push('--post-transfer');
   if (trueUpFees) args.push('--true-up-fees');
   if (force) args.push('--force');

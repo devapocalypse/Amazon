@@ -17,7 +17,7 @@ function AmazonFeesPull() {
 
     const rangeLabel = end && end !== start ? `${start} through ${end}` : start;
     const confirmed = window.confirm(
-      `Pull and post Amazon fees for ${rangeLabel} (Central Time)?\n\nThis creates a real Purchase transaction in QuickBooks, with one line per fee.`
+      `Pull and post Amazon fees for ${rangeLabel} (Central Time)?\n\nThis creates real Purchase transactions in QuickBooks -- one per fee occurrence, except storage/inbound-convenience/long-term-storage fees, which are summed into a single combined line per pull.`
     );
     if (!confirmed) return;
 
@@ -51,8 +51,10 @@ function AmazonFeesPull() {
       <p>
         Pulls Amazon's periodic FBA fees (storage, inbound transportation, inbound
         placement, removal, subscription, long-term storage) for a day or range
-        (Central Time) and posts them to QuickBooks as one Purchase transaction,
-        with each fee occurrence as its own line -- nothing summed together.
+        (Central Time) and posts them to QuickBooks as one Purchase transaction per
+        fee occurrence -- except storage, inbound convenience, and long-term storage
+        fees, which are summed into a single combined line per pull to match how
+        Amazon's settlement report shows them.
       </p>
 
       <div className="date-fields">
@@ -74,11 +76,36 @@ function AmazonFeesPull() {
       {result && (
         <div className="results">
           <h3>
-            {result.lines.length} fee line(s), {result.start} to {result.end}, total ${result.total.toFixed(2)}
+            {result.lines.length} fee occurrence(s) pulled, {result.start} to {result.end}, total ${result.total.toFixed(2)}
           </h3>
 
           {result.posted && (
-            <p>✓ Posted to QuickBooks as Purchase Id {result.purchase_id}.</p>
+            <div>
+              <p>✓ Posted to QuickBooks as {result.purchases.length} transaction(s):</p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fee Type</th>
+                    <th>Amount</th>
+                    <th>Order/Reference ID</th>
+                    <th>Purchase Id</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.purchases.map((purchase, i) => (
+                    <tr key={i}>
+                      <td>
+                        {purchase.fee_type}
+                        {purchase.occurrence_count > 1 ? ` (${purchase.occurrence_count} occurrences summed)` : ""}
+                      </td>
+                      <td>{purchase.amount.toFixed(2)}</td>
+                      <td>{purchase.order_id}</td>
+                      <td>{purchase.id}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
 
           {!result.posted && result.skipped_reason && (
@@ -95,26 +122,29 @@ function AmazonFeesPull() {
           )}
 
           {result.lines.length > 0 && (
-            <table>
-              <thead>
-                <tr>
-                  <th>Fee Type</th>
-                  <th>Amount</th>
-                  <th>Order/Reference ID</th>
-                  <th>Description</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.lines.map((line, i) => (
-                  <tr key={i}>
-                    <td>{line.fee_type}</td>
-                    <td>{line.amount.toFixed(2)}</td>
-                    <td>{line.order_id}</td>
-                    <td>{line.description}</td>
+            <>
+              <h4>All pulled fee occurrences (raw, before summarization)</h4>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fee Type</th>
+                    <th>Amount</th>
+                    <th>Order/Reference ID</th>
+                    <th>Description</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {result.lines.map((line, i) => (
+                    <tr key={i}>
+                      <td>{line.fee_type}</td>
+                      <td>{line.amount.toFixed(2)}</td>
+                      <td>{line.order_id}</td>
+                      <td>{line.description}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
           )}
         </div>
       )}
